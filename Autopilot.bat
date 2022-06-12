@@ -1,4 +1,5 @@
 @echo off
+setlocal
 
 :autopilotInfoBlock
     :: **POWERSHELL CMDLETS** Creates HWID directory, declares execution policy, defines script path, installs packages, runs autopilot PS script, and creates autopilotInfo.csv to be renamed below.
@@ -30,12 +31,22 @@
     if exist C:\HWID\%serialVar%.csv goto :copyFile
 
 :copyFile
-    :: Checks for removable drive and folder to copy file to.
-    if exist D:\HWID (
+    :: Begins by finding what drive letter is assigned to the removable disk.
+    for /f "skip=1 tokens=1-10" %%a in ('wmic logicaldisk get description^, deviceid') do (
+        if "%%a %%b"=="Removable Disk" (
+            set removableDrive=%%c
+        )
+    )
+
+    :: Checks for HWID folder in removable drive to copy .csv file to.
+    if exist %removableDrive%\HWID (
         echo Copying file to removable drive.
-        copy C:\HWID\%serialVar%.csv D:\HWID
+        copy C:\HWID\%serialVar%.csv %removableDrive%\HWID
     ) else (
-        powershell write-host -fore Red Removable drive cannot be detected, or path is incorrect.
+        echo Creating HWID folder on removable drive.
+        md %removableDrive%\HWID
+        echo Copying file to removable drive.
+        copy C:\HWID\%serialVar%.csv %removableDrive%\HWID
     )
     pause
     goto :eof  
