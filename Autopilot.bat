@@ -1,18 +1,17 @@
 @echo off
 
 :autopilotInfoBlock
-    :: **POWERSHELL CMDLETS** Creates HWID directory, declares execution policy,defines script path, installs packages, runs autopilot PS script, and creates autopilotInfo.csv to be renamed below.
+    :: **POWERSHELL CMDLETS** Creates HWID directory, declares execution policy, defines script path, installs packages, runs autopilot PS script, and creates autopilotInfo.csv to be renamed below.
     Powershell "& {set-executionpolicy -scope Process -executionpolicy remotesigned -force; new-item -type directory -path 'C:\HWID'; set-location -path "C:\HWID"; $env:Path += ';C:\Program Files\WindowsPowerShell\Scripts'; install-packageprovider -name NuGet -requiredversion 2.8.5.201 -force; install-package -name get-windowsautopilotinfo -force; get-windowsautopilotinfo -outputfile autopilotInfo.csv;}"
     goto :autopilotInfoConfirmation
 
 :autopilotInfoConfirmation
-    :: User confirmation for pass/fail of the powershell cmdlets.
-    set confirmSuccess=
-    set /p confirmSuccess=Did Autopilot install, run, and create autopilotInfo.csv in C:\HWID? (Y/[N]):
-    if %confirmSuccess%==Y goto :csvRenameBlock
-    if %confirmSuccess%==y goto :csvRenameBlock
-    if %confirmSuccess%==N goto :autopilotFail
-    if %confirmSuccess%==n goto :autopilotFail
+    :: Check for pass/fail of the powershell cmdlets.
+    if exist C:\HWID\autopilotInfo.csv (
+        goto :csvRenameBlock
+    ) else (
+        goto :autopilotFail
+    )
 
 :csvRenameBlock
     :: Pulls serial number from BIOS and creates a temporary variable.
@@ -23,33 +22,27 @@
     set serialVar=%tempVar: =%
     echo System Serial Number Acquired.
 
-    :: Changes Directory to where autopilotInfo.csv is saved.
-    cd C:\HWID
-
     :: Renames autopilotInfo.csv to a serial specific .csv file.
-    rename "autopilotInfo.csv" "%serialVar%.csv"
+    rename C:\HWID\autopilotInfo.csv %serialVar%.csv
     echo Rename Completed.
 
-    :: User confirmation for correct file rename.
-    set confirmComplete=
-    set /p confirmComplete=Does the .csv file match the serial on the unit?(Y/[N]):
-    if %confirmComplete%==Y goto :moveFile
-    if %confirmComplete%==y goto :moveFile
-    if %confirmComplete%==N goto :renameFallback
-    if %confirmComplete%==n goto :renameFallback
+    :: Check for correct file rename to proceed with copying to removable drive.
+    if exist C:\HWID\%serialVar%.csv goto :copyFile
 
-:moveFile
-    :: Copy renamed .csv to USB drive
-    echo Looks like you have discovered a feature still under development. Please go away!
-    pause    
+:copyFile
+    :: Checks for removable drive and folder to copy file to.
+    if exist D:\HWID (
+        echo Copying file to removable drive.
+        copy C:\HWID\%serialVar%.csv D:\HWID
+    ) else (
+        powershell write-host -fore Red Removable drive cannot be detected, or path is incorrect.
+    )
+    pause
+    goto :eof  
 
 :autopilotFail
-    echo Find out why it failed. Fix it. Try again.
-    :: research funtionality to possible create and save an error log from PS cmdlets.
+    :: Returns error to user and quits session.
+    echo .csv file has failed to be created. This is likely due to the script not installing correctly, or not being run as administrator. Try again.
     pause
-
-:renameFallback
-    echo It's seems the code has a few hidden flaws, rename the file manually.
-    rem add if statement to check if %serialVar%.csv exists, if yes goto moveFile
 
 
